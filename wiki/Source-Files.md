@@ -115,6 +115,7 @@ See [Constants Reference](Constants-Reference) for full details.
 |-------|------|-------------|
 | `window` | `SDL_Window *` | OS window handle |
 | `renderer` | `SDL_Renderer *` | GPU drawing context |
+| `controller` | `SDL_GameController *` | First connected gamepad; `NULL` when none |
 | `parallax` | `ParallaxSystem` | Multi-layer scrolling background (replaces single `background` texture) |
 | `floor_tile` | `SDL_Texture *` | Grass tile, 9-slice tiled across `FLOOR_Y` |
 | `platform_tex` | `SDL_Texture *` | Shared tile texture for all platform pillars |
@@ -204,7 +205,7 @@ while (gs->running):
   SDL_PollEvent → SDL_QUIT or SDLK_ESCAPE → gs->running = 0
 
   // 2. Update
-  player_handle_input(&gs->player, gs->snd_jump)
+  player_handle_input(&gs->player, gs->snd_jump, gs->controller)
   player_update(&gs->player, dt, gs->platforms, gs->platform_count)
   spiders_update(gs->spiders, gs->spider_count, dt)
   // player-spider AABB collision (with 1.5 s invincibility window)
@@ -258,6 +259,8 @@ SDL_DestroyTexture(spider_tex)       → spider_tex = NULL
 SDL_DestroyTexture(platform_tex)     → platform_tex = NULL
 SDL_DestroyTexture(floor_tile)       → floor_tile = NULL
 parallax_cleanup(&parallax)
+SDL_GameControllerClose(controller)  → controller = NULL  (skipped if NULL)
+SDL_QuitSubSystem(SDL_INIT_GAMECONTROLLER)
 SDL_DestroyRenderer(renderer)        → renderer = NULL
 SDL_DestroyWindow(window)            → window = NULL
 ```
@@ -309,7 +312,8 @@ Values map directly to the sprite sheet **row index** via the `ANIM_ROW[]` table
 
 ```c
 void player_init(Player *player, SDL_Renderer *renderer);
-void player_handle_input(Player *player, Mix_Chunk *snd_jump);
+void player_handle_input(Player *player, Mix_Chunk *snd_jump,
+                         SDL_GameController *ctrl);
 void player_update(Player *player, float dt, const Platform *platforms, int platform_count);
 void player_render(Player *player, SDL_Renderer *renderer);
 SDL_Rect player_get_hitbox(const Player *player);
