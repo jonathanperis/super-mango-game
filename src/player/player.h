@@ -54,6 +54,8 @@ typedef struct {
     int       climb_source;     /* 0 = vine, 1 = ladder, 2 = rope                */
     int       jump_held;         /* 1 = jump key still held from last jump; prevents re-jump */
     float     hurt_timer;        /* seconds remaining of invincibility blink; 0 = normal */
+    float     spawn_x;          /* level-defined spawn x (platform top-left)           */
+    float     spawn_y;          /* level-defined spawn y (platform top; adjusted by -h + FLOOR_SINK) */
     SDL_Rect     frame;   /* source rect: which part of the sheet to draw    */
     SDL_Texture *texture; /* GPU image handle; NULL until player_init runs   */
 } Player;
@@ -94,10 +96,11 @@ void player_update(Player *player, float dt,
                    const RopeDecor *ropes, int rope_count,
                    const Bridge *bridges, int bridge_count,
                    const SpikePlatform *spike_platforms, int spike_platform_count,
-                   const int *sea_gaps, int sea_gap_count,
+                   const int *floor_gaps, int floor_gap_count,
                    int *out_bounce_idx,
                    int *out_fp_landed_idx,
-                   int prev_fp_landed_idx);
+                   int prev_fp_landed_idx,
+                   int world_w);
 
 /* Draw the player sprite at its current position, offset by the camera. */
 void player_render(Player *player, SDL_Renderer *renderer, int cam_x);

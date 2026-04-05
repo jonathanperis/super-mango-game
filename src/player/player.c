@@ -74,7 +74,7 @@ void player_init(Player *player, SDL_Renderer *renderer) {
      * The sheet is 192×288 px and contains a 4-column × 6-row grid of 48×48
      * frames. We only draw one frame at a time using a source clipping rect.
      */
-    player->texture = IMG_LoadTexture(renderer, "assets/player.png");
+    player->texture = IMG_LoadTexture(renderer, "assets/sprites/player/player.png");
     if (!player->texture) {
         fprintf(stderr, "Failed to load Player.png: %s\n", IMG_GetError());
         exit(EXIT_FAILURE);
@@ -101,12 +101,17 @@ void player_init(Player *player, SDL_Renderer *renderer) {
      * the sprite frame, so the feet visually rest on the grass surface.
      */
     /*
-     * Spawn on top of the first platform (x=80, y=172, width=TILE_SIZE).
+     * Default spawn on top of the first platform (x=80, y=172, width=TILE_SIZE).
      * Centre horizontally on the pillar; snap vertically using the same
      * formula as platform landing: plat_y − player_h + FLOOR_SINK.
+     *
+     * spawn_x/spawn_y store the level-defined spawn point.  level_load will
+     * override these (and reposition x/y) once the LevelDef is available.
      */
-    player->x        = 80.0f + (TILE_SIZE - player->w) / 2.0f;
-    player->y        = (float)(FLOOR_Y - 2 * TILE_SIZE + 16 - player->h + FLOOR_SINK);
+    player->spawn_x  = 80.0f;
+    player->spawn_y  = (float)(FLOOR_Y - 2 * TILE_SIZE + 16);
+    player->x        = player->spawn_x + (TILE_SIZE - player->w) / 2.0f;
+    player->y        = player->spawn_y - player->h + FLOOR_SINK;
     player->vx       = 0.0f;
     player->vy       = 0.0f;   /* start stationary; gravity will pull down   */
     player->speed    = 160.0f; /* horizontal speed: 160 logical px per second */
@@ -608,10 +613,11 @@ void player_update(Player *player, float dt,
                    const RopeDecor *ropes, int rope_count,
                    const Bridge *bridges, int bridge_count,
                    const SpikePlatform *spike_platforms, int spike_platform_count,
-                   const int *sea_gaps, int sea_gap_count,
+                   const int *floor_gaps, int floor_gap_count,
                    int *out_bounce_idx,
                    int *out_fp_landed_idx,
-                   int prev_fp_landed_idx) {
+                   int prev_fp_landed_idx,
+                   int world_w) {
 
     (void)vine_count;    /* vine_index selects the climbable; count unused here */
     (void)ladder_count;
@@ -658,8 +664,8 @@ void player_update(Player *player, float dt,
         /* Horizontal world clamp (same logic as normal path) */
         if (player->x + PHYS_PAD_X < 0.0f)
             player->x = -(float)PHYS_PAD_X;
-        if (player->x + player->w - PHYS_PAD_X > WORLD_W)
-            player->x = (float)(WORLD_W - player->w + PHYS_PAD_X);
+        if (player->x + player->w - PHYS_PAD_X > world_w)
+            player->x = (float)(world_w - player->w + PHYS_PAD_X);
 
         player_animate(player, (Uint32)(dt * 1000.0f));
         return;   /* skip normal gravity / floor / platform logic */
@@ -731,9 +737,9 @@ void player_update(Player *player, float dt,
      */
     float phys_center_x = player->x + player->w / 2.0f;
     int over_ground = 1;
-    for (int g = 0; g < sea_gap_count; g++) {
-        float gx = (float)sea_gaps[g];
-        if (phys_center_x >= gx && phys_center_x < gx + (float)SEA_GAP_W) {
+    for (int g = 0; g < floor_gap_count; g++) {
+        float gx = (float)floor_gaps[g];
+        if (phys_center_x >= gx && phys_center_x < gx + (float)FLOOR_GAP_W) {
             over_ground = 0;
             break;
         }
@@ -985,8 +991,8 @@ void player_update(Player *player, float dt,
      */
     if (player->x + PHYS_PAD_X < 0.0f)
         player->x = -(float)PHYS_PAD_X;
-    if (player->x + player->w - PHYS_PAD_X > WORLD_W)
-        player->x = (float)(WORLD_W - player->w + PHYS_PAD_X);
+    if (player->x + player->w - PHYS_PAD_X > world_w)
+        player->x = (float)(world_w - player->w + PHYS_PAD_X);
 
     /*
      * Ceiling clamp — stop upward movement when the physics top hits the
@@ -1076,9 +1082,9 @@ SDL_Rect player_get_hitbox(const Player *player) {
  * because they were set once in player_init and don't change.
  */
 void player_reset(Player *player) {
-    /* Respawn on top of the first platform (same as player_init). */
-    player->x         = 80.0f + (TILE_SIZE - player->w) / 2.0f;
-    player->y         = (float)(FLOOR_Y - 2 * TILE_SIZE + 16 - player->h + FLOOR_SINK);
+    /* Respawn at the level-defined spawn point (set by level_load). */
+    player->x         = player->spawn_x + (TILE_SIZE - player->w) / 2.0f;
+    player->y         = player->spawn_y - player->h + FLOOR_SINK;
     player->vx        = 0.0f;
     player->vy        = 0.0f;
     player->on_ground = 1;
