@@ -53,11 +53,6 @@
 #define CONTENT_X  (PROP_X + 8)
 #define FIELD_X    (CONTENT_X + LABEL_W)
 
-/* SCROLLBAR_W — width of the vertical scrollbar on the panel's right edge. */
-#define SCROLLBAR_W            8
-/* SCROLLBAR_MIN_THUMB_H — minimum thumb height to stay clickable. */
-#define SCROLLBAR_MIN_THUMB_H  20
-
 /* Collapsible subsection open states — accessed by editor.c for config_h computation */
 int g_plx_open  = 0;
 int g_fg_open   = 0;
@@ -80,19 +75,6 @@ static int cfg_scroll_y = 0;
 void cfg_scroll(int delta) {
     cfg_scroll_y += delta;
     if (cfg_scroll_y < 0) cfg_scroll_y = 0;
-}
-
-/*
- * cfg_sb_* — scrollbar drag state for the Level Config panel.
- * Mirrors the palette's sb_* variables; kept separate to avoid coupling.
- */
-static int cfg_sb_dragging           = 0;
-static int cfg_sb_drag_anchor_y      = 0;
-static int cfg_sb_drag_anchor_scroll = 0;
-
-/* point_in_rect — axis-aligned hit test (duplicated from palette.c; static = private). */
-static int point_in_rect(int px, int py, int rx, int ry, int rw, int rh) {
-    return px >= rx && px < rx + rw && py >= ry && py < ry + rh;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1683,72 +1665,5 @@ fg_done:
     }
 
 fog_done:
-
-    /* ---- Scrollbar ---- */
-
-    if (max_scroll > 0) {
-        int track_x = x + PROP_W - SCROLLBAR_W;
-        int track_y = content_top;
-        int track_h = content_visible_h;
-
-        /*
-         * Thumb height — proportional to visible/total content ratio.
-         * Since track_h == content_visible_h, the formula simplifies to
-         * track_h * track_h / content_total_h.
-         */
-        int thumb_h = (int)((float)track_h * (float)track_h / (float)content_total_h);
-        if (thumb_h < SCROLLBAR_MIN_THUMB_H) thumb_h = SCROLLBAR_MIN_THUMB_H;
-        if (thumb_h > track_h)              thumb_h = track_h;
-
-        int travel  = track_h - thumb_h;
-        int thumb_y = track_y + (travel > 0 ? (int)((float)cfg_scroll_y / max_scroll * travel) : 0);
-
-        int in_thumb = point_in_rect(es->ui.mouse_x, es->ui.mouse_y,
-                                     track_x, thumb_y, SCROLLBAR_W, thumb_h);
-        int in_track = point_in_rect(es->ui.mouse_x, es->ui.mouse_y,
-                                     track_x, track_y, SCROLLBAR_W, track_h);
-
-        if (cfg_sb_dragging) {
-            if (es->ui.mouse_down) {
-                if (travel > 0) {
-                    int dy = es->ui.mouse_y - cfg_sb_drag_anchor_y;
-                    cfg_scroll_y = cfg_sb_drag_anchor_scroll + (int)((float)dy * max_scroll / travel);
-                    if (cfg_scroll_y < 0)          cfg_scroll_y = 0;
-                    if (cfg_scroll_y > max_scroll) cfg_scroll_y = max_scroll;
-                }
-            } else {
-                cfg_sb_dragging = 0;
-            }
-        } else if (in_thumb && es->ui.mouse_clicked) {
-            cfg_sb_dragging           = 1;
-            cfg_sb_drag_anchor_y      = es->ui.mouse_y;
-            cfg_sb_drag_anchor_scroll = cfg_scroll_y;
-        } else if (in_track && !in_thumb && es->ui.mouse_clicked) {
-            if (travel > 0) {
-                float ratio = (float)(es->ui.mouse_y - track_y - thumb_h / 2) / (float)travel;
-                if (ratio < 0.0f) ratio = 0.0f;
-                if (ratio > 1.0f) ratio = 1.0f;
-                cfg_scroll_y = (int)(ratio * max_scroll);
-            }
-        }
-
-        /* Recompute after potential scroll_y update this frame. */
-        thumb_y = track_y + (travel > 0 ? (int)((float)cfg_scroll_y / max_scroll * travel) : 0);
-
-        /* Track */
-        SDL_Color track_col = UI_INPUT_BG;
-        SDL_SetRenderDrawColor(es->ui.renderer,
-                               track_col.r, track_col.g, track_col.b, track_col.a);
-        SDL_Rect track_rect = { track_x, track_y, SCROLLBAR_W, track_h };
-        SDL_RenderFillRect(es->ui.renderer, &track_rect);
-
-        /* Thumb */
-        SDL_Color thumb_col = (cfg_sb_dragging || in_thumb) ? UI_BTN_HOT : UI_BTN;
-        SDL_SetRenderDrawColor(es->ui.renderer,
-                               thumb_col.r, thumb_col.g, thumb_col.b, thumb_col.a);
-        SDL_Rect thumb_rect = { track_x + 1, thumb_y + 1, SCROLLBAR_W - 2, thumb_h - 2 };
-        SDL_RenderFillRect(es->ui.renderer, &thumb_rect);
-    }
-
     SDL_RenderSetClipRect(es->ui.renderer, NULL);
 }

@@ -169,18 +169,6 @@ static const PaletteEntry entries[] = {
  */
 #define PAD_X           12
 
-/*
- * SCROLLBAR_W — width in pixels of the vertical scrollbar on the right
- * edge of the palette panel.
- */
-#define SCROLLBAR_W     8
-
-/*
- * SCROLLBAR_MIN_THUMB_H — minimum thumb height in pixels.
- * Prevents the thumb from becoming too small to click when content is vast.
- */
-#define SCROLLBAR_MIN_THUMB_H 20
-
 /* ------------------------------------------------------------------ */
 /* Scroll state — retained across frames                               */
 /* ------------------------------------------------------------------ */
@@ -202,18 +190,6 @@ static int scroll_y = 0;
  * All start expanded.  Clicking a category header toggles it.
  */
 static int category_open[6] = { 0, 0, 0, 0, 0, 0 };
-
-/*
- * Scrollbar drag state — retained across frames so a drag that started on
- * the thumb continues even if the cursor leaves the thumb area.
- *
- * sb_dragging           : 1 while the user holds the mouse on the thumb.
- * sb_drag_anchor_y      : mouse_y at the moment the drag began.
- * sb_drag_anchor_scroll : scroll_y at the moment the drag began.
- */
-static int sb_dragging           = 0;
-static int sb_drag_anchor_y      = 0;
-static int sb_drag_anchor_scroll = 0;
 
 /*
  * palette_scroll — Adjust the palette scroll offset by a pixel delta.
@@ -553,102 +529,6 @@ void palette_render(EditorState *es, int start_y, int available_h)
             /* Advance cursor past this entity row. */
             cursor_y += ROW_H;
         }
-    }
-
-    /* ---- Scrollbar ---- */
-
-    /*
-     * Only draw the scrollbar when there is content that overflows the
-     * visible area.  When everything fits, the scrollbar would be invisible
-     * (thumb == track height) so we skip it entirely.
-     */
-    if (scrollable_h > 0) {
-        int track_x = panel_x + PANEL_W - SCROLLBAR_W;
-        int track_y = content_top;
-        int track_h = panel_h - TITLE_H;
-
-        /*
-         * Thumb height — proportional to the ratio of visible area to total
-         * scrollable content.  Clamped to a minimum so it stays clickable.
-         *
-         * total_scroll_content is total_content_h minus the fixed title bar,
-         * i.e. the full height of the scrolling content region.
-         */
-        int total_scroll_content = total_content_h - TITLE_H;
-        int thumb_h = (int)((float)track_h * (float)track_h / (float)total_scroll_content);
-        if (thumb_h < SCROLLBAR_MIN_THUMB_H) thumb_h = SCROLLBAR_MIN_THUMB_H;
-        if (thumb_h > track_h)              thumb_h = track_h;
-
-        int travel = track_h - thumb_h; /* pixels the thumb can move */
-
-        /* Compute thumb top edge from current scroll position. */
-        int thumb_y = track_y + (travel > 0 ? (int)((float)scroll_y / scrollable_h * travel) : 0);
-
-        /* ---- Handle drag input ---- */
-
-        int in_thumb = point_in_rect(ui->mouse_x, ui->mouse_y,
-                                     track_x, thumb_y, SCROLLBAR_W, thumb_h);
-        int in_track = point_in_rect(ui->mouse_x, ui->mouse_y,
-                                     track_x, track_y, SCROLLBAR_W, track_h);
-
-        if (sb_dragging) {
-            if (ui->mouse_down) {
-                /*
-                 * Continue drag — translate mouse movement into scroll offset.
-                 * dy pixels of mouse movement → (dy / travel) * scrollable_h
-                 * pixels of content scroll.
-                 */
-                if (travel > 0) {
-                    int dy = ui->mouse_y - sb_drag_anchor_y;
-                    scroll_y = sb_drag_anchor_scroll + (int)((float)dy * scrollable_h / travel);
-                    if (scroll_y < 0)           scroll_y = 0;
-                    if (scroll_y > scrollable_h) scroll_y = scrollable_h;
-                }
-            } else {
-                sb_dragging = 0; /* mouse released — end drag */
-            }
-        } else if (in_thumb && ui->mouse_clicked) {
-            /* Start drag from the thumb. */
-            sb_dragging           = 1;
-            sb_drag_anchor_y      = ui->mouse_y;
-            sb_drag_anchor_scroll = scroll_y;
-        } else if (in_track && !in_thumb && ui->mouse_clicked) {
-            /*
-             * Click on the track outside the thumb — jump so the thumb
-             * centre aligns with the click position.
-             */
-            if (travel > 0) {
-                float ratio = (float)(ui->mouse_y - track_y - thumb_h / 2) / (float)travel;
-                if (ratio < 0.0f) ratio = 0.0f;
-                if (ratio > 1.0f) ratio = 1.0f;
-                scroll_y = (int)(ratio * scrollable_h);
-            }
-        }
-
-        /* Recompute thumb_y after any scroll_y update this frame. */
-        thumb_y = track_y + (travel > 0 ? (int)((float)scroll_y / scrollable_h * travel) : 0);
-
-        /* ---- Draw track ---- */
-
-        SDL_Color track_col = UI_INPUT_BG;
-        SDL_SetRenderDrawColor(ui->renderer,
-                               track_col.r, track_col.g, track_col.b, track_col.a);
-        SDL_Rect track_rect = { track_x, track_y, SCROLLBAR_W, track_h };
-        SDL_RenderFillRect(ui->renderer, &track_rect);
-
-        /* ---- Draw thumb ---- */
-
-        /*
-         * Thumb colour: bright when dragging or hovering, dim when idle.
-         * This gives the user immediate visual feedback that the scrollbar
-         * is interactive.
-         */
-        SDL_Color thumb_col = (sb_dragging || in_thumb) ? UI_BTN_HOT : UI_BTN;
-        SDL_SetRenderDrawColor(ui->renderer,
-                               thumb_col.r, thumb_col.g, thumb_col.b, thumb_col.a);
-        /* 1px inset on each side so the thumb has a small visual gap from track edges. */
-        SDL_Rect thumb_rect = { track_x + 1, thumb_y + 1, SCROLLBAR_W - 2, thumb_h - 2 };
-        SDL_RenderFillRect(ui->renderer, &thumb_rect);
     }
 
     /* Remove clip rect so other panels are not affected */
